@@ -117,7 +117,7 @@ export function buildSet(scene, renderer) {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const apron = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.05, 13), new THREE.MeshStandardMaterial({ color: 0x57595b, roughness: 0.92 }));
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.02, 13), new THREE.MeshStandardMaterial({ color: 0x232426, roughness: 0.95 }));
   apron.position.set(0, 0.022, RAMP.ZB + 5);
   apron.receiveShadow = true;
   scene.add(apron);
@@ -216,13 +216,13 @@ export function buildSet(scene, renderer) {
 
   // --- site dressing: the red wall, marker lights, floodlight banks, drones, far lights
   const STRIP_X = -13;
-  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 66), glow(0xff1016, 2.8));
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 66), glow(0xff1016, 1.5));
   strip.position.set(STRIP_X, 0.3, -6);
   scene.add(strip);
   const stripGlow = new THREE.Mesh(
     new THREE.PlaneGeometry(9, 70),
     new THREE.MeshBasicMaterial({
-      map: canvasTexture(64, 4, (g) => { const gr = g.createLinearGradient(0, 0, 64, 0); gr.addColorStop(0, 'rgba(255,20,24,0)'); gr.addColorStop(0.5, 'rgba(255,20,24,0.26)'); gr.addColorStop(1, 'rgba(255,20,24,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 4); }),
+      map: canvasTexture(64, 4, (g) => { const gr = g.createLinearGradient(0, 0, 64, 0); gr.addColorStop(0, 'rgba(255,20,24,0)'); gr.addColorStop(0.5, 'rgba(255,20,24,0.1)'); gr.addColorStop(1, 'rgba(255,20,24,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 4); }),
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     })
   );
@@ -270,15 +270,10 @@ export function buildSet(scene, renderer) {
   follow.shadow.mapSize.set(2048, 2048);
   follow.shadow.camera.near = 6; follow.shadow.camera.far = 60;
   follow.shadow.bias = -0.0006; follow.shadow.normalBias = 0.03;
-  // floodlight bank: rims the car and back-lights the smoke
-  spot(0xe6efff, 1.5, V(-46, 4, -8), V(0, 1, -22), 0.5, 0.8);
-  spot(0xe6efff, 1.2, V(-60, 5, 26), V(0, 0.8, 2), 0.42, 0.8);
-  // red spill from the wall
-  for (const z of [-28, -12, 6]) {
-    const l = new THREE.PointLight(0xff1a20, 20, 34, 1.6);
-    l.position.set(STRIP_X + 0.6, 0.8, z);
-    scene.add(l);
-  }
+  // floodlight bank: one wide light rims the car and back-lights the smoke along the whole run.
+  // (every light costs on every pixel, so the scene keeps as few as it can; the red wall's glow
+  //  on the car comes from the reflection map instead of real lights)
+  spot(0xe6efff, 1.4, V(-52, 5, 6), V(0, 0.8, -10), 0.62, 0.8);
   // neutral work light for the teardown (off until needed)
   const work = spot(0xffffff, 0, V(4.5, 7.5, 8.5), V(0, 0.7, 1.2), 0.62, 0.9);
 

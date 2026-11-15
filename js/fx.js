@@ -71,7 +71,7 @@ export class Smoke {
           vec4 mv = viewMatrix * vec4(iPos, 1.0);
           mv.xy += r * iPar.x;
           vH = r.y + 0.5;                 // 0 at the bottom of the puff on screen, 1 at the top
-          vUv = uv; vAlpha = iPar.z; vTint = iTint; vCell = iPar.w;
+          vUv = uv; vAlpha = iPar.z * smoothstep(1.0, 4.5, -mv.z); vTint = iTint; vCell = iPar.w;
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
@@ -127,7 +127,7 @@ export class Smoke {
       v[k + 1] = v[k + 1] * dr + this.rise[i] * dt;
       p[k] += v[k] * dt; p[k + 1] += v[k + 1] * dt; p[k + 2] += v[k + 2] * dt;
       const size = this.size0[i] + this.grow[i] * (1 - Math.exp(-age[i] * 0.5));
-      const floorY = size * 0.2;                       // puffs rest on the ground and spread
+      const floorY = size * 0.42;                      // keep the puff's lower edge above the ground, so it never shows a hard cut                       // puffs rest on the ground and spread
       if (p[k + 1] < floorY) { p[k + 1] = floorY; if (v[k + 1] < 0) v[k + 1] *= -0.15; }
       this.depth[i] = (p[k] - cx) * fx + (p[k + 1] - cy) * fy + (p[k + 2] - cz) * fz;
       this.order[n++] = i;

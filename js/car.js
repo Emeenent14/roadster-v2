@@ -122,7 +122,7 @@ export function buildCar(model, scene) {
     const spinner = new THREE.Group();   // spins on the axle
     pivot.add(spinner); spinner.updateMatrixWorld(true);
     list.forEach((o) => spinner.attach(o));
-    car.wheels.push({ id, pivot, spinner, base: wc.clone(), side: Math.sign(wc.x), hero: id === 'RF' });
+    car.wheels.push({ id, pivot, spinner, stock: list, base: wc.clone(), side: Math.sign(wc.x), hero: id === 'RF' });
     if (id === 'RF') car.anchors.hub.copy(wc);
   }
 
@@ -332,4 +332,33 @@ export function layoutInspect(car) {
     part.obj.position.copy(part.base).add(V(gx - part.center.x, 0, gz - part.center.z));
     part.grid = V(gx, part.center.y, gz);
   });
+}
+
+/**
+ * Replace the car's stock wheels with a more detailed wheel model.
+ * The model is a single wheel whose axle runs along its own Z, outer face towards +Z.
+ */
+export function mountWheels(car, wheel) {
+  const holder = new THREE.Group();
+  holder.add(wheel);
+  holder.updateMatrixWorld(true);
+  const box = boxOf(wheel), c = box.getCenter(V()), size = box.getSize(V());
+  wheel.position.sub(c);                                    // spin about its own centre
+  const k = (car.wheelR * 2) / Math.max(size.x, size.y);    // match the stock tyre's diameter
+  wheel.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true;
+    const m = o.material, n = (m.name || '').toLowerCase();
+    if (n === 'material.003') { m.roughness = 0.86; m.metalness = 0; m.color.set(0x070707); }           // tyre
+    if (n === 'material.001') { m.envMapIntensity = 1.5; }                                                // gloss black rim
+    if (n === 'material') { m.envMapIntensity = 1.6; }                                                    // metal hub
+    if (n === 'material.002') { m.depthWrite = false; m.envMapIntensity = 1.8; }                          // translucent face cover
+  });
+  for (const w of car.wheels) {
+    w.stock.forEach((o) => { o.visible = false; });
+    const g = holder.clone(true);
+    g.scale.setScalar(k);
+    g.rotation.y = w.side > 0 ? Math.PI / 2 : -Math.PI / 2;  // outer face away from the car
+    w.spinner.add(g);
+  }
 }

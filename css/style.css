@@ -214,15 +214,20 @@ button { font: inherit; color: inherit; }
 .footer a { color: var(--dim); }
 
 /* ============ Small screens ============ */
-@media (max-width: 760px) {
+/* Portrait (phones): captions stack at the bottom, under the car. This must match the
+   camera's own test for a tall screen (aspect below 0.9 in js/main.js), which lifts the picture to make room. */
+@media (max-aspect-ratio: 9/10) {
   .cap--tl, .cap--tr, .cap--bl, .cap--br { left: var(--gutter); right: var(--gutter); top: auto; bottom: 62px; text-align: left; }
   .cap--tr .cap__body, .cap--br .cap__body { margin-left: 0; }
-  .cap--br .glitch::before, .cap--br .glitch::after, .cap--tr .glitch::before, .cap--tr .glitch::after { text-align: left; }
+  .cap--mtop { top: 84px; bottom: auto; }            /* wide ramp shots: the action is low, the sky above is empty */
   .cap__mega { font-size: clamp(28px, 9.4vw, 54px); }
   .cap__stat { font-size: clamp(64px, 26vw, 130px); }
   .cap--cta { left: var(--gutter); right: var(--gutter); top: auto; bottom: 48px; width: auto; transform: translateY(26px); }
   .cap--cta.is-on { transform: none; }
   .cap--cta .cap__mega { font-size: clamp(20px, 6.4vw, 32px); margin-bottom: 10px; }
+}
+
+@media (max-width: 760px) {
   .trim { padding: 9px 12px; grid-template-columns: 52px 1fr; }
   .trim p:last-child { display: none; }
   .hud { grid-template-columns: 1fr 1fr; bottom: 250px; }

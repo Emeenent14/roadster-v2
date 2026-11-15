@@ -142,8 +142,8 @@ const seatAt = (dx, dy, dz) => () => (car ? [car.anchors.cockpit.x + dx, car.anc
 const KEYS = [
   // behind the car at the foot of the ramp
   // (a long lens from far back, so the ramp towers right behind the car)
-  { p: 0.0,   pos: [2.2, 0.95, 4],      look: [0, 2.3, -34], abs: true, fov: 9.5, wide: true },
-  { p: 0.036, pos: [1.6, 0.9, 2],       look: [0, 3.3, -34], abs: true, fov: 10.5, wide: true },
+  { p: 0.0,   pos: [2.2, 0.95, 4],      look: [0, 2.3, -34], abs: true, fov: 9.5, wide: true, my: 0.25 },
+  { p: 0.036, pos: [1.6, 0.9, 2],       look: [0, 3.3, -34], abs: true, fov: 10.5, wide: true, my: 0.25 },
   // wide: the whole ramp, car climbing
   { p: 0.038, cut: true, pos: [25, 2.2, -7], look: [0, 13.2, -42.5], abs: true, fov: 44, wide: true },
   { p: 0.094, pos: [23.5, 2.4, -8],     look: [0, 13.8, -42.5], abs: true, fov: 43, wide: true },
@@ -183,6 +183,7 @@ const arr = (v) => (typeof v === 'function' ? v() : v);
 const keyPos = (k, out) => { const a = arr(k.pos); out.set(a[0], a[1], a[2]); return k.rel ? out.add(st.center) : out; };
 const keyLook = (k, out) => { const a = arr(k.look); out.set(a[0], a[1], a[2]); return k.abs ? out : out.add(st.center); };
 let shakeAmt = 0;
+const phoneLift = (k) => k.my ?? (k.wide ? 0.04 : 0.12);
 function applyCamera(p, time) {
   let i = 0;
   while (i < KEYS.length - 2 && p >= KEYS[i + 1].p) i++;
@@ -202,7 +203,9 @@ function applyCamera(p, time) {
   camera.fov = lerp(A.fov, B.fov, t) * (narrow && !A.wide ? 1.12 : 1);
   const w = window.innerWidth, h = window.innerHeight;
   const sx = narrow ? 0 : lerp(A.sx || 0, B.sx || 0, t);
-  camera.setViewOffset(w, h, -sx * h, narrow && !A.wide ? 0.12 * h : 0, w, h);    // also applies the new fov
+  // phones: lift the picture so the caption underneath does not cover the car
+  const my = narrow ? lerp(phoneLift(A), phoneLift(B), t) : 0;
+  camera.setViewOffset(w, h, -sx * h, my * h, w, h);    // also applies the new fov
 }
 
 /* ================================================================== *

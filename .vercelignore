@@ -2,3 +2,6 @@ server.mjs
 .*
 node_modules
 .shots
+models-src
+tools
+package-lock.json

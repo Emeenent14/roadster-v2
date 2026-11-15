@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -12,9 +13,10 @@ import { buildCar, mountWheels, CAR_H } from './car.js';
 /* ================================================================== *
  *  Config
  * ================================================================== */
-const MODEL_URL = 'models/roadster.glb?v=1';   // bump v when a file changes
+// the high-detail car (see tools/subdivide.mjs); ?model=src loads the original for comparison
+const MODEL_URL = new URLSearchParams(location.search).get('model') === 'src' ? 'models/roadster.glb?v=1' : 'models/roadster-hd.glb?v=1';   // bump v when a file changes
 const WHEEL_URL = 'models/wheel.glb?v=1';
-const BYTES = { car: 3299168, wheel: 662640 };
+const BYTES = { car: 2197632, wheel: 662640 };
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');              // ?debug snaps instantly; ?debug&u=3.4 jumps to a point in the story
 const USE_BLOOM = params.get('fx') !== '0';     // ?fx=0 renders without the bloom pass (for comparing cost)
@@ -357,6 +359,7 @@ function tickLoader(now) {
 requestAnimationFrame(tickLoader);
 
 const gltf = new GLTFLoader();
+gltf.setMeshoptDecoder(MeshoptDecoder);
 Promise.all([
   gltf.loadAsync(MODEL_URL, (x) => { load.car = Math.min(x.loaded, BYTES.car); }),
   gltf.loadAsync(WHEEL_URL, (x) => { load.wheel = Math.min(x.loaded, BYTES.wheel); }),
@@ -470,8 +473,13 @@ function emitEffects(dt, energy, pow) {
   }
 }
 
+// the 3D viewer takes over the screen: pause this scene and the page's scrolling while it is open
+let paused = false;
+window.addEventListener('viewer:open', () => { paused = true; lenis?.stop(); });
+window.addEventListener('viewer:close', () => { paused = false; clock.getDelta(); lenis?.start(); });
+
 renderer.setAnimationLoop((now) => {
-  if (manual) return;                      // the capture tool is stepping frames itself
+  if (manual || paused) return;            // the capture tool is stepping frames itself, or the viewer is open
   lenis?.raf(now);
   frame(Math.min(clock.getDelta(), 0.05));
 });

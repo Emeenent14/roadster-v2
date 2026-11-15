@@ -40,7 +40,7 @@
       <a href="#wheel">Wheels</a>
       <a href="#trims">Versions</a>
     </nav>
-    <span class="nav__note">Unofficial fan concept</span>
+    <button class="nav__cta" type="button" data-open-viewer>3D Viewer</button>
   </header>
   <div class="progress" aria-hidden="true"><i id="progress"></i></div>
 
@@ -54,7 +54,7 @@
         </div>
         <div class="btn-row reveal">
           <a class="btn btn--ghost" href="#climb">Watch the run</a>
-          <a class="btn" href="https://www.tesla.com/roadster" target="_blank" rel="noopener">See it on tesla.com</a>
+          <button class="btn" type="button" data-open-viewer>Explore in 3D</button>
         </div>
       </div>
       <div class="cue" aria-hidden="true">Scroll<span></span></div>
@@ -143,8 +143,8 @@
           <p>One seat. Thrusters all the way round.</p>
         </article>
         <div class="btn-row trims__cta reveal">
-          <a class="btn btn--ghost" href="https://www.tesla.com/roadster" target="_blank" rel="noopener">See the real one on tesla.com</a>
-          <a class="btn" href="#top">Back to the top</a>
+          <button class="btn btn--ghost" type="button" data-open-viewer>Open the 3D viewer</button>
+          <a class="btn" href="https://www.tesla.com/roadster" target="_blank" rel="noopener">See the real one on tesla.com</a>
         </div>
       </div>
     </section>
@@ -154,12 +154,77 @@
   <div id="labels" aria-hidden="true"></div>
 
   <footer class="footer">
+    <div class="footer__viewer-cta">
+      <button class="btn btn--viewer" id="view3d" type="button" data-open-viewer>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/><path d="M12 12l9-4.5"/><path d="M12 12v9"/><path d="M12 12L3 7.5"/></svg>
+        View in 3D
+      </button>
+    </div>
     <p><strong>Unofficial fan concept.</strong> Not affiliated with, endorsed by, or sponsored by Tesla, Inc. “Tesla” and “Roadster” are trademarks of Tesla, Inc. The stunt is a 3D recreation; the chassis hardware shown is illustrative.</p>
     <p>3D models, both CC BY 4.0, materials modified:
       <a href="https://sketchfab.com/3d-models/teala-roadster-2027-22a1e0d904644f00849a253bc904cf01" target="_blank" rel="noopener">“teala roadster 2027” by yarifmx</a> and
       <a href="https://sketchfab.com/3d-models/tesla-roadster-fly-wheels-31a0476f5fd14fc282e799b8ae4ae4f3" target="_blank" rel="noopener">“Tesla Roadster fly wheels” by minchou19</a>.</p>
   </footer>
 
+  <!-- 3D Interactive Viewer -->
+  <div id="viewer" class="viewer" aria-hidden="true">
+    <canvas id="viewerCanvas" class="viewer__canvas"></canvas>
+    
+    <div class="viewer__topbar">
+      <span class="viewer__title">Roadster · 3D Viewer</span>
+      <button class="viewer__close" id="viewerClose" type="button" aria-label="Close viewer">✕</button>
+    </div>
+
+    <div class="viewer__controls">
+      <div class="viewer__group">
+        <span class="viewer__label">Paint · <span id="viewerPaint">Pearl White</span></span>
+        <div class="viewer__colors" id="colorPicker">
+          <button class="viewer__swatch is-active" type="button" data-color="#eff0f1" style="background:#eff0f1" title="Pearl White" aria-label="Pearl White"></button>
+          <button class="viewer__swatch" type="button" data-color="#9da2a8" style="background:#9da2a8" title="Quicksilver" aria-label="Quicksilver"></button>
+          <button class="viewer__swatch" type="button" data-color="#4a4d52" style="background:#4a4d52" title="Stealth Grey" aria-label="Stealth Grey"></button>
+          <button class="viewer__swatch" type="button" data-color="#111214" style="background:#111214;border:1px solid #555" title="Solid Black" aria-label="Solid Black"></button>
+          <button class="viewer__swatch" type="button" data-color="#7a0c14" style="background:#7a0c14" title="Ultra Red" aria-label="Ultra Red"></button>
+          <button class="viewer__swatch" type="button" data-color="#16304f" style="background:#16304f" title="Deep Blue" aria-label="Deep Blue"></button>
+          <button class="viewer__swatch" type="button" data-color="#e6e7e8" data-finish="matte" style="background:#e6e7e8;border:1px solid #333" title="Matte White" aria-label="Matte White"></button>
+        </div>
+      </div>
+      
+      <div class="viewer__group">
+        <span class="viewer__label">Actions</span>
+        <div class="viewer__actions">
+          <button class="viewer__btn" id="toggleDoors" type="button" title="Lift the canopy" aria-pressed="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 15c3-6 15-6 18 0"/><path d="M7 11l-1-4M17 11l1-4"/><path d="M3 18h18"/></svg>
+            <span>Canopy</span>
+          </button>
+          <button class="viewer__btn" id="toggleTeardown" type="button" title="Show the chassis" aria-pressed="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            <span>Chassis</span>
+          </button>
+          <button class="viewer__btn" id="toggleThrust" type="button" title="Fire the thrusters" aria-pressed="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 12h9"/><path d="M13 8l7 4-7 4z"/><path d="M4 8h5M4 16h5"/></svg>
+            <span>Thrusters</span>
+          </button>
+          <button class="viewer__btn" id="autoRotate" type="button" title="Auto Rotate">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-6.22-8.56"/><path d="M21 3v6h-6"/></svg>
+            <span>Spin</span>
+          </button>
+          <button class="viewer__btn" id="resetView" type="button" title="Reset View">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            <span>Reset</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="viewer__hotspots" id="viewerHotspots"></div>
+    <aside class="viewer__info" id="viewerInfo" hidden>
+      <h3 id="viewerInfoTitle"></h3>
+      <p id="viewerInfoText"></p>
+    </aside>
+    <div class="viewer__hint">Drag to rotate · Scroll or pinch to zoom · Tap a dot</div>
+  </div>
+
   <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/viewer.js"></script>
 </body>
 </html>

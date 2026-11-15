@@ -4,5 +4,11 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs 5174"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.1.1",
+    "@gltf-transform/core": "^4.1.1",
+    "@gltf-transform/extensions": "^4.1.1",
+    "@gltf-transform/functions": "^4.1.1"
   }
 }

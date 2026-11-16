@@ -26,8 +26,10 @@ if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
 const S_START = -2.5;     // the car waits just short of where the ramp starts to curve
 const LAND_Z = -24;       // where it comes down
-const STOP_Z = 1.2;       // where the sprint ends
+const STOP_Z = 30;        // where the sprint ends
 const HOVER_Y = 7;        // height at which the four floor jets catch the fall
+const HERO_OUT = 1.15;   // how far the loose wheel comes off its hub towards the lens
+const LOGO_UP = 0;        // wheel angle at which the badge on its centre cap stands upright
 
 /* ================================================================== *
  *  The page drives the story. Position in the story is "u":
@@ -54,8 +56,8 @@ const T = {
   roll: [L + 0.1, L + 0.72],
   hover: [B - 0.1, B + 0.66],
   squash: [B + 0.66, B + 0.86],
-  sprint: [S + 0.2, S + 0.68],
-  brake: [S + 0.64, S + 0.9],
+  sprint: [S + 0.14, S + 0.74],
+  brake: [S + 0.7, S + 0.93],
   tear: [TD + 0.04, TD + 0.56],
   wheelOut: [W + 0.03, W + 0.26],
   wheelRoll: [W + 0.56, W + 0.9],
@@ -102,6 +104,8 @@ let perfLevel = 0;   // how far the frame-rate guard has had to step quality dow
 
 const set = buildSet(scene, renderer);
 set.follow.shadow.mapSize.set(1024, 1024);
+set.work.position.z = STOP_Z + 7.3;      // the teardown light stands over wherever the car stops
+set.work.target.position.z = STOP_Z;
 const smoke = new Smoke(scene, 700);
 smoke.redLineX = set.stripX;
 const detail = new THREE.SpotLight(0xffffff, 0, 0, 0.5, 0.85, 0);   // for the wheel and brake close-ups
@@ -200,10 +204,12 @@ const KEYS = [
   { u: B + 0.68,   abs: [7.6, 3.9, -17.8], look: [0, 0.1, 0], fov: 36, sx: 0.1 },
   { u: S + 0.04,   abs: [6.4, 3.4, -15.5], look: [0, 0.3, 0.5], fov: 36, sx: 0.08 },
   // sprint: launch from behind the rear thrusters, run alongside, then pull ahead as it brakes
-  { u: S + 0.16,   loc: 0, off: [3.0, 0.5, -5.6], look: [0, -0.05, 0.6], fov: 46, sx: 0.06 },
-  { u: S + 0.36,   loc: 0, off: [3.4, 0.45, -4.6], look: [0, -0.05, 1], fov: 58, sx: 0.06 },
-  { u: S + 0.56,   loc: 0, off: [4.6, 0.4, 1.2], look: [0, -0.1, 0.6], fov: 54, sx: 0.04 },
-  { u: S + 0.76,   loc: 0, off: [2.4, 0.2, 5.6], look: [0, -0.05, 0.4], fov: 42 },
+  // (the view from behind is held for most of the run, closing in on the tail the whole time)
+  { u: S + 0.12,   loc: 0, off: [3.0, 0.5, -5.8], look: [0, -0.05, 0.6], fov: 46, sx: 0.06 },
+  { u: S + 0.3,    loc: 0, off: [3.3, 0.48, -5.0], look: [0, -0.05, 0.9], fov: 54, sx: 0.06 },
+  { u: S + 0.5,    loc: 0, off: [2.8, 0.42, -3.9], look: [0, -0.05, 1], fov: 58, sx: 0.06 },
+  { u: S + 0.68,   loc: 0, off: [4.6, 0.4, 1.2], look: [0, -0.1, 0.6], fov: 54, sx: 0.04 },
+  { u: S + 0.84,   loc: 0, off: [2.4, 0.2, 5.6], look: [0, -0.05, 0.4], fov: 42 },
   // design: a slow walk round the nose
   { u: A + 0.05,   loc: 0, off: [1.5, 0.15, 5.4], look: [0, -0.05, 0.4], fov: 36 },
   { u: A + 0.55,   loc: 0, off: [-4.4, 0.55, 4.6], look: [0, 0, 0.2], fov: 34, sx: -0.14 },
@@ -212,8 +218,8 @@ const KEYS = [
   { u: TD + 0.5,   loc: 0, off: [5.4, 2.7, 5.6], look: [0, 1.25, 0], fov: 44, sx: 0.12 },
   { u: TD + 0.96,  loc: 0, off: [6.0, 1.5, 2.6], look: [0, 0.9, 0.5], fov: 42, sx: 0.12 },
   // the wheel comes off its hub to the lens, then rolls away
-  { u: W + 0.26,   abs: hubAt(2.75, 0.16, 0.5), lookAbs: hubAt(1.0, 0.03, 0), fov: 26, sx: 0.16, pf: 1.5, hold: true },
-  { u: W + 0.56,   abs: hubAt(2.6, 0.3, -0.5), lookAbs: hubAt(1.0, 0.03, 0), fov: 26, sx: 0.16, pf: 1.5, hold: true },
+  { u: W + 0.26,   abs: hubAt(2.75, 0.12, 0.3), lookAbs: hubAt(0.4 + HERO_OUT, 0.01, 0), fov: 26, sx: 0.24, pf: 1.5, hold: true },
+  { u: W + 0.56,   abs: hubAt(2.7, 0.2, -0.2), lookAbs: hubAt(0.4 + HERO_OUT, 0.01, 0), fov: 26, sx: 0.24, pf: 1.5, hold: true },
   { u: W + 0.94,   abs: hubAt(2.0, 0.2, 0.3), lookAbs: hubAt(-0.1, 0, 0), fov: 28, sx: 0.16, pf: 1.5 },
   // into the driver's seat
   { u: K + 0.42,   abs: seatAt(0.5, 0.9, -1.3), lookAbs: seatAt(0, -0.05, 0.9), fov: 50, pf: 1 },
@@ -368,7 +374,7 @@ Promise.all([
   mountWheels(car, wheelFile.scene);
   const h = car.anchors.hub;
   detail.position.set(h.x + 3.6, 2.2, h.z + 2.6 + STOP_Z);
-  detail.target.position.set(h.x + 0.7, h.y, h.z + STOP_Z);
+  detail.target.position.set(h.x + 0.4 + HERO_OUT, h.y, h.z + STOP_Z);
   scene.add(detail, detail.target);
   warmUp();
   load.loaded = true;
@@ -523,10 +529,12 @@ function frame(dt) {
   lastZ = st.center.z; lastS = st.s;
   spin += (onRamp ? ds : onGround ? dz : 0) / car.wheelR + (!onRamp && !onGround ? dt * 9 : 0);
   for (const w of car.wheels) {
-    const x = w.base.x + w.side * slide + (w.hero ? w.side * heroOut * 0.62 : 0);
+    const x = w.base.x + w.side * slide + (w.hero ? w.side * heroOut * HERO_OUT : 0);
     const roll = w.hero ? heroRoll * 6.5 : 0;                          // the loose wheel rolls off down the runway
     w.pivot.position.set(x, w.base.y, w.base.z + roll);
-    w.spinner.rotation.x = spin + roll / car.wheelR + (w.hero ? heroOut * 0.9 : 0);
+    // on its way to the lens the loose wheel turns until its badge stands upright
+    const upright = LOGO_UP + Math.round((spin - LOGO_UP) / (Math.PI * 2)) * Math.PI * 2;
+    w.spinner.rotation.x = spin + roll / car.wheelR + (w.hero ? (upright - spin) * heroOut : 0);
   }
   for (const f of car.fans) f.rotation.y += dt * 6;
   car.mats.fanRing.emissiveIntensity = tear * 0.9;

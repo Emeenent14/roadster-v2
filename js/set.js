@@ -216,17 +216,17 @@ export function buildSet(scene, renderer) {
 
   // --- site dressing: the red wall, marker lights, floodlight banks, drones, far lights
   const STRIP_X = -13;
-  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 66), glow(0xff1016, 1.5));
-  strip.position.set(STRIP_X, 0.3, -6);
+  const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 104), glow(0xff1016, 1.5));
+  strip.position.set(STRIP_X, 0.3, 13);
   scene.add(strip);
   const stripGlow = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 70),
+    new THREE.PlaneGeometry(9, 108),
     new THREE.MeshBasicMaterial({
       map: canvasTexture(64, 4, (g) => { const gr = g.createLinearGradient(0, 0, 64, 0); gr.addColorStop(0, 'rgba(255,20,24,0)'); gr.addColorStop(0.5, 'rgba(255,20,24,0.1)'); gr.addColorStop(1, 'rgba(255,20,24,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 4); }),
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     })
   );
-  stripGlow.rotation.x = -Math.PI / 2; stripGlow.position.set(STRIP_X, 0.015, -6);
+  stripGlow.rotation.x = -Math.PI / 2; stripGlow.position.set(STRIP_X, 0.015, 13);
   scene.add(stripGlow);
 
   const dot = new THREE.SphereGeometry(1, 10, 8), mx = new THREE.Matrix4();
@@ -236,7 +236,7 @@ export function buildSet(scene, renderer) {
     scene.add(im);
   };
   const markers = [];
-  for (let z = -38; z <= 26; z += 2.2) markers.push([STRIP_X - 1.6, 0.55, z, 0.055]);
+  for (let z = -38; z <= 64; z += 2.2) markers.push([STRIP_X - 1.6, 0.55, z, 0.055]);
   place(markers, glow(0xffffff, 5));
   const floods = [];
   for (const [bx, bz, n] of [[-46, -8, 9], [-60, 26, 7], [58, -62, 5]]) {
@@ -273,7 +273,7 @@ export function buildSet(scene, renderer) {
   // floodlight bank: one wide light rims the car and back-lights the smoke along the whole run.
   // (every light costs on every pixel, so the scene keeps as few as it can; the red wall's glow
   //  on the car comes from the reflection map instead of real lights)
-  spot(0xe6efff, 1.4, V(-52, 5, 6), V(0, 0.8, -10), 0.62, 0.8);
+  spot(0xe6efff, 1.4, V(-52, 5, 6), V(0, 0.8, 8), 0.62, 0.8);
   // neutral work light for the teardown (off until needed)
   const work = spot(0xffffff, 0, V(4.5, 7.5, 8.5), V(0, 0.7, 1.2), 0.62, 0.9);
 

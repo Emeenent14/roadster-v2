@@ -22,7 +22,7 @@ let paints = [];                                         // body paint materials
 const $ = (id) => document.getElementById(id);
 const viewer = $('viewer'), canvas = $('viewerCanvas');
 const colorPicker = $('colorPicker');
-const btn = { canopy: $('toggleDoors'), chassis: $('toggleTeardown'), thrust: $('toggleThrust'), spin: $('autoRotate'), reset: $('resetView') };
+const btn = { chassis: $('toggleTeardown'), thrust: $('toggleThrust'), spin: $('autoRotate'), reset: $('resetView') };
 const hotWrap = $('viewerHotspots'), info = $('viewerInfo'), infoTitle = $('viewerInfoTitle'), infoText = $('viewerInfoText');
 const paintName = $('viewerPaint');
 
@@ -126,7 +126,7 @@ function loadCar() {
     const set = new Set();
     for (const p of car.parts) {
       const m = p.obj.material;
-      if (m.isMeshPhysicalMaterial && !m.transparent && m.color.r > 0.8) set.add(m);
+      if (m.isMeshPhysicalMaterial && !m.transparent && m.color.r > 0.5) set.add(m);
     }
     paints = [...set];
     buildHotspots();
@@ -200,18 +200,20 @@ function selectHot(h, fly = true) {
 /* ============ Actions ============ */
 function setToggle(name, on) {
   state[name] = on ? 1 : 0;
+  if (!btn[name]) return;                 // the canopy has no button: only the cockpit hotspot lifts it
   btn[name].classList.toggle('is-active', !!on);
   btn[name].setAttribute('aria-pressed', on ? 'true' : 'false');
 }
 function setPaint(swatch) {
   colorPicker.querySelectorAll('.viewer__swatch').forEach((s) => s.classList.toggle('is-active', s === swatch));
   if (paintName) paintName.textContent = swatch.title;
-  const matte = swatch.dataset.finish === 'matte';
+  const ano = swatch.dataset.finish === 'ano';     // satin anodised metal; the others are glossy clear-coated paint
   for (const m of paints) {
     m.userData.target = new THREE.Color(swatch.dataset.color);
-    m.roughness = matte ? 0.72 : 0.4;
-    m.clearcoat = matte ? 0.12 : 0.85;
-    m.clearcoatRoughness = matte ? 0.6 : 0.2;
+    m.roughness = ano ? 0.44 : 0.4;
+    m.metalness = ano ? 0.45 : 0.08;
+    m.clearcoat = ano ? 0.3 : 0.85;
+    m.clearcoatRoughness = ano ? 0.35 : 0.2;
   }
 }
 function setDefaultView(instant = false) {
@@ -321,7 +323,6 @@ function close() {
 document.querySelectorAll('[data-open-viewer]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); open(); }));
 $('viewerClose').addEventListener('click', close);
 colorPicker.addEventListener('click', (e) => { const s = e.target.closest('.viewer__swatch'); if (s) setPaint(s); });
-btn.canopy.addEventListener('click', () => setToggle('canopy', !state.canopy));
 btn.chassis.addEventListener('click', () => {
   setToggle('chassis', !state.chassis);
   if (activeHot) selectHot(null, false);

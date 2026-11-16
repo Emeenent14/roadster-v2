@@ -5,6 +5,9 @@ import { createJet } from './fx.js';
 
 export const CAR_LENGTH = 4.6;   // world units
 export const CAR_H = 0.62;       // height of the car's centre above its wheels
+const TYRE_SCALE = 1.29 * 1.1;   // tyre diameter against the model's stock tyre
+const TYRE_WIDTH = 0.92;         // tyre width against the stock tyre (the inner face stays where it was)
+const RIM_SCALE = 1.1 / 1.1;     // alloy against the wheel model's own; cancels the last tyre bump so the alloy keeps its size
 
 const boxOf = (o) => new THREE.Box3().setFromObject(o);
 
@@ -41,8 +44,8 @@ function materialFor(m, mats) {
   if (/steering/.test(n)) return new THREE.MeshStandardMaterial({ name: m.name, color: 0x141517, roughness: 0.72, metalness: 0.1 });
   if (/interior/.test(n)) return new THREE.MeshStandardMaterial({ name: m.name, color: 0xdcdcdb, roughness: 0.86, metalness: 0 });               // seats
   if (lum > 0.5) {
-    // white body: satin coating under a thin clear coat
-    return new THREE.MeshPhysicalMaterial({ name: m.name, color: 0xeff0f1, roughness: 0.4, metalness: 0.08, clearcoat: 0.85, clearcoatRoughness: 0.2, envMapIntensity: 1.1, side: THREE.DoubleSide });
+    // Ano White: a pale satin-metal finish, like anodised aluminium, under a thin soft clear coat
+    return new THREE.MeshPhysicalMaterial({ name: m.name, color: 0xd6d9dd, roughness: 0.44, metalness: 0.45, clearcoat: 0.3, clearcoatRoughness: 0.35, envMapIntensity: 1.25, side: THREE.DoubleSide });
   }
   return new THREE.MeshPhysicalMaterial({ name: m.name, color: 0x090a0b, roughness: 0.52, metalness: 0.3, clearcoat: 0.45, clearcoatRoughness: 0.35, side: THREE.DoubleSide });
 }
@@ -51,9 +54,45 @@ function materialFor(m, mats) {
 function layerFor(srcName) {
   const n = srcName.toLowerCase();
   if (/glass/.test(n)) return 3;
-  if (/base021|lightw|lightr/.test(n)) return 2;
+  if (/base021|hoodpanel|lightw|lightr/.test(n)) return 2;
   if (/baseblack02|baseblack03|baseblack221|object21|object01/.test(n)) return 1;
   return 0;
+}
+
+/**
+ * The model ships its hood as part of the dark lower body. Cut those faces out into a panel of
+ * their own, painted like the rest of the shell (and lifted with it in the teardown).
+ */
+function splitHood(meshes, root) {
+  const src = meshes.find((o) => /baseblack221/i.test(o.userData.srcName));
+  const shell = meshes.find((o) => /base021/i.test(o.userData.srcName));
+  const index = src && src.geometry.index;
+  if (!index || !shell) return;
+  src.updateWorldMatrix(true, false);
+  const toCar = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(src.matrixWorld);
+  const pos = src.geometry.attributes.position;
+  const a = V(), b = V(), c = V(), n = V(), hood = [], rest = [];
+  for (let t = 0; t < index.count; t += 3) {
+    const i0 = index.getX(t), i1 = index.getX(t + 1), i2 = index.getX(t + 2);
+    a.fromBufferAttribute(pos, i0).applyMatrix4(toCar);
+    b.fromBufferAttribute(pos, i1).applyMatrix4(toCar);
+    c.fromBufferAttribute(pos, i2).applyMatrix4(toCar);
+    n.subVectors(b, a).cross(c.sub(a)).normalize();
+    const y = (a.y + b.y) / 2, z = (a.z + b.z) / 2;
+    // the top skin ahead of the windscreen; the nose fascia below the light bar stays dark
+    (z > 1.3 && y > 0.55 && n.y > 0.4 ? hood : rest).push(i0, i1, i2);
+  }
+  if (!hood.length) return;
+  const panelGeo = src.geometry.clone();
+  panelGeo.setIndex(hood);
+  src.geometry.setIndex(rest);
+  const panel = new THREE.Mesh(panelGeo, shell.material);
+  panel.userData.srcName = 'hoodpanel';
+  panel.castShadow = true; panel.receiveShadow = true;
+  panel.position.copy(src.position); panel.quaternion.copy(src.quaternion); panel.scale.copy(src.scale);
+  src.parent.add(panel);
+  panel.updateMatrixWorld(true);
+  meshes.push(panel);
 }
 
 /* ------------------------------------------------------------------ *
@@ -101,6 +140,8 @@ export function buildCar(model, scene) {
     meshes.push(o);
   });
 
+  splitHood(meshes, root);
+
   // lift every mesh into the root so each can move on its own
   const isWheel = (o) => /tire|object31/i.test(o.userData.srcName);
   const corners = new Map();
@@ -122,12 +163,37 @@ export function buildCar(model, scene) {
     const spinner = new THREE.Group();   // spins on the axle
     pivot.add(spinner); spinner.updateMatrixWorld(true);
     list.forEach((o) => spinner.attach(o));
-    car.wheels.push({ id, pivot, spinner, stock: list, base: wc.clone(), side: Math.sign(wc.x), hero: id === 'RF' });
+    car.wheels.push({ id, pivot, spinner, stock: list, base: wc.clone(), width: tb.getSize(V()).x, side: Math.sign(wc.x), hero: id === 'RF' });
     if (id === 'RF') car.anchors.hub.copy(wc);
   }
 
+  // The model's own rims and centre caps come as two meshes spanning all four corners, named like
+  // body panels (one also carries some of the tail). Left in, they sit inside the new wheels and
+  // ride up with the lower body as a second set of wheels, so cut out every face that lies inside a wheel.
+  const _v = V();
+  const oldRims = new Set();
+  for (const o of meshes) {
+    const index = o.geometry.index;
+    if (!index || !/object21|object01/i.test(o.userData.srcName)) continue;
+    const pos = o.geometry.attributes.position;
+    o.updateWorldMatrix(true, false);
+    const inside = new Uint8Array(pos.count);
+    for (let i = 0; i < pos.count; i++) {
+      _v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      inside[i] = car.wheels.some((w) => Math.hypot(_v.y - w.base.y, _v.z - w.base.z) < car.wheelR * 0.86 && Math.abs(_v.x - w.base.x) < 0.3) ? 1 : 0;
+    }
+    const keep = [];
+    for (let t = 0; t < index.count; t += 3) {
+      const i0 = index.getX(t), i1 = index.getX(t + 1), i2 = index.getX(t + 2);
+      if (!(inside[i0] && inside[i1] && inside[i2])) keep.push(i0, i1, i2);
+    }
+    if (keep.length > index.count / 2) continue;       // mostly bodywork: a wheel-arch liner, not a rim
+    if (keep.length) o.geometry.setIndex(keep);
+    else { o.visible = false; oldRims.add(o); }
+  }
+
   // body pieces
-  meshes.filter((o) => !isWheel(o)).forEach((o, i) => {
+  meshes.filter((o) => !isWheel(o) && !oldRims.has(o)).forEach((o, i) => {
     const b = boxOf(o), cc = b.getCenter(V());
     const layer = layerFor(o.userData.srcName);
     car.parts.push({ obj: o, base: o.position.clone(), layer, center: cc, size: b.getSize(V()), index: i });
@@ -344,20 +410,39 @@ export function mountWheels(car, wheel) {
   holder.updateMatrixWorld(true);
   const box = boxOf(wheel), c = box.getCenter(V()), size = box.getSize(V());
   wheel.position.sub(c);                                    // spin about its own centre
-  const k = (car.wheelR * 2) / Math.max(size.x, size.y);    // match the stock tyre's diameter
-  wheel.traverse((o) => {
+  // The tyre is larger than the stock one so it fills the arch. The whole car rides higher by the
+  // extra radius, so each wheel stays centred in its arch and still stands on the ground.
+  const grow = car.wheelR * (TYRE_SCALE - 1);
+  car.wheelR += grow;
+  for (const o of car.root.children) o.position.y += grow;
+  for (const p of car.parts) p.base.y += grow;
+  for (const w of car.wheels) w.base.y += grow;
+  car.anchors.hub.y += grow; car.anchors.cockpit.y += grow;
+  const k = (car.wheelR * 2) / Math.max(size.x, size.y);
+  // The arches leave no room for a bigger tyre, so the wheel grows inside it instead:
+  // a larger alloy under a lower-profile tyre.
+  const rim = new THREE.Group();
+  holder.add(rim);
+  const alloy = [];
+  wheel.traverse((o) => { if (o.isMesh && (o.material.name || '').toLowerCase() !== 'material.003') alloy.push(o); });
+  alloy.forEach((o) => rim.attach(o));
+  rim.scale.set(RIM_SCALE, RIM_SCALE, 1);
+  holder.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true; o.receiveShadow = true;
     const m = o.material, n = (m.name || '').toLowerCase();
     if (n === 'material.003') { m.roughness = 0.86; m.metalness = 0; m.color.set(0x070707); }           // tyre
-    if (n === 'material.001') { m.envMapIntensity = 1.5; }                                                // gloss black rim
+    if (n === 'material.001') { m.color.set(0x34373c); m.roughness = 0.3; m.envMapIntensity = 2.6; }      // dark graphite rim: pure black vanished inside the arches
     if (n === 'material') { m.envMapIntensity = 1.6; }                                                    // metal hub
     if (n === 'material.002') { m.depthWrite = false; m.envMapIntensity = 1.8; }                          // translucent face cover
   });
   for (const w of car.wheels) {
     w.stock.forEach((o) => { o.visible = false; });
     const g = holder.clone(true);
-    g.scale.setScalar(k);
+    // nearly as wide as the tyre the body was shaped around, tucked just inside the arch lip
+    const width = w.width * TYRE_WIDTH;
+    g.scale.set(k, k, width / size.z);
+    g.position.x = -w.side * (w.width - width) / 2;
     g.rotation.y = w.side > 0 ? Math.PI / 2 : -Math.PI / 2;  // outer face away from the car
     w.spinner.add(g);
   }

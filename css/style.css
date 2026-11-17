@@ -419,3 +419,9 @@ html.is-viewer { overflow: hidden; }
   .viewer__hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .viewer__hotspot::after { animation: none; } }
+
+/* Demo mode (?demo): nothing on screen but the story */
+html.is-demo { scrollbar-width: none; scroll-behavior: auto; }
+html.is-demo::-webkit-scrollbar { display: none; }
+html.is-demo, html.is-demo * { cursor: none !important; }
+html.is-demo:not(.is-demo-nav) .nav, html.is-demo .progress, html.is-demo .cue { opacity: 0 !important; pointer-events: none; }

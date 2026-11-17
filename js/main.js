@@ -20,7 +20,9 @@ const BYTES = { car: 2197632, wheel: 662640 };
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');              // ?debug snaps instantly; ?debug&u=3.4 jumps to a point in the story
 const USE_BLOOM = params.get('fx') !== '0';     // ?fx=0 renders without the bloom pass (for comparing cost)
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// ?demo plays the story by itself for screen recording (see "Demo mode" below)
+const DEMO = params.has('demo');
+const reduceMotion = !DEMO && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const instant = DEBUG || reduceMotion;
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
@@ -323,7 +325,7 @@ const io = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
 
 let lenis = null;
-if (!instant) {
+if (!instant && !DEMO) {
   import('https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.mjs')
     .then(({ default: Lenis }) => { lenis = new Lenis({ lerp: 0.1, wheelMultiplier: 0.9 }); if (!ready) lenis.stop(); })
     .catch(() => {});
@@ -479,6 +481,51 @@ function emitEffects(dt, energy, pow) {
   }
 }
 
+/* ================================================================== *
+ *  Demo mode, for screen recording: the page scrolls itself at a steady pace.
+ *    ?demo                    the whole story, top to bottom
+ *    &from=climb&to=sprint    start / end at a section (its key) or at a story position (e.g. 4.5)
+ *    &speed=0.5               screen heights per second
+ *    &delay=3                 seconds to wait before it starts (time to start the recorder)
+ *    &nav=1                   keep the top bar (hidden by default)
+ *    &loop=1                  start over when it reaches the end
+ *  Keys: Space pauses / resumes, R starts over.
+ * ================================================================== */
+let demo = null;
+if (DEMO) {
+  const root = document.documentElement;
+  root.classList.add('is-demo');
+  if (params.get('nav') === '1') root.classList.add('is-demo-nav');
+  const at = (v, fallback) => (v === null ? fallback : v in IDX ? IDX[v] : Number.isFinite(+v) ? +v : fallback);
+  const yOf = (uu) => {
+    const i = Math.min(sections.length - 1, Math.max(0, Math.floor(uu)));
+    return Math.min(tops[i] + (uu - i) * heights[i], document.documentElement.scrollHeight - window.innerHeight);
+  };
+  const speed = +(params.get('speed') || 0.5), delay = +(params.get('delay') ?? 3), loop = params.get('loop') === '1';
+  const RAMP_T = 1.2;                       // seconds to ease up to speed, and down again at the end
+  let t = -delay, playing = true;
+  demo = {
+    // distance along the run after t seconds: ease in, cruise, ease out
+    step(dt) {
+      if (!ready) return;
+      const y0 = yOf(at(params.get('from'), 0)), y1 = yOf(at(params.get('to'), sections.length));
+      const D = Math.max(1, y1 - y0), v = speed * window.innerHeight, a = Math.min(RAMP_T, D / v), T = D / v + a;
+      if (playing) t += dt;
+      const tt = Math.max(0, Math.min(T, t));
+      const d = tt < a ? (v * tt * tt) / (2 * a) : tt < T - a ? v * (tt - a / 2) : D - (v * (T - tt) ** 2) / (2 * a);
+      window.scrollTo({ top: y0 + d, behavior: 'instant' });   // the page's CSS asks for smooth scrolling, which would lag every step
+      if (t > T + 2 && loop) t = -delay;
+    },
+    restart() { t = -delay; playing = true; },
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') { e.preventDefault(); playing = !playing; }
+    if (e.code === 'KeyR') demo.restart();
+  });
+  if (DEBUG) window.__rs.demo = demo;
+  console.info('Demo mode: Space pauses, R restarts. Options: from, to, speed, delay, nav, loop.');
+}
+
 // the 3D viewer takes over the screen: pause this scene and the page's scrolling while it is open
 let paused = false;
 window.addEventListener('viewer:open', () => { paused = true; lenis?.stop(); });
@@ -487,7 +534,9 @@ window.addEventListener('viewer:close', () => { paused = false; clock.getDelta()
 renderer.setAnimationLoop((now) => {
   if (manual || paused) return;            // the capture tool is stepping frames itself, or the viewer is open
   lenis?.raf(now);
-  frame(Math.min(clock.getDelta(), 0.05));
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (demo) demo.step(dt);
+  frame(dt);
 });
 
 function frame(dt) {
@@ -583,7 +632,7 @@ function frame(dt) {
   render();
 
   // --- keep it smooth on weaker devices: drop resolution first, then shadows, then bloom
-  if (ready && !manual && dt < 0.1 && !document.hidden) {
+  if (ready && !manual && !DEMO && dt < 0.1 && !document.hidden) {   // (a demo keeps full quality: the recorder can cost frames)
     perfN++; perfT += dt;
     if (perfN >= 75) {
       const fps = perfN / perfT; perfN = 0; perfT = 0;

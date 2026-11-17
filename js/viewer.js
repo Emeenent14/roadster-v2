@@ -14,6 +14,7 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 let active = false, ready = false, loading = null;
 let renderer, scene, camera, controls, car, clock;
 let tween = null, activeHot = null;
+let vt = 0;                                              // viewer time in seconds (steps with the frames, so a video render stays in sync)
 const state = { chassis: 0, canopy: 0, thrust: 0 };      // targets (0/1)
 const shown = { chassis: 0, canopy: 0, thrust: 0 };      // eased values actually displayed
 let paints = [];                                         // body paint materials the swatches recolour
@@ -179,7 +180,7 @@ function orbitPos(target, az, el, dist) {
   );
 }
 function flyTo(pos, target, ms = 1300) {
-  tween = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: performance.now(), ms: reduceMotion ? 1 : ms };
+  tween = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target, start: vt * 1000, ms: reduceMotion ? 1 : ms };
 }
 function selectHot(h, fly = true) {
   activeHot = h;
@@ -235,19 +236,21 @@ function resetAll() {
 const ease = (t) => t * t * (3 - 2 * t);
 const seg = (v, a, b) => Math.min(1, Math.max(0, (v - a) / (b - a)));
 const _wp = new THREE.Vector3(), _wd = new THREE.Vector3();
-function frame() {
+function frame(fixedDt) {
   if (!active) return;
-  const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
+  const dt = fixedDt ?? Math.min(clock.getDelta(), 0.05);
+  vt += dt;
+  const time = vt;
   const k = reduceMotion ? 1 : 1 - Math.exp(-dt * 4);
   for (const key in shown) shown[key] += (state[key] - shown[key]) * k;
 
   if (tween) {
-    const t = ease(Math.min(1, (performance.now() - tween.start) / tween.ms));
+    const t = ease(Math.min(1, (vt * 1000 - tween.start) / tween.ms));
     camera.position.lerpVectors(tween.p0, tween.p1, t);
     controls.target.lerpVectors(tween.t0, tween.t1, t);
     if (t >= 1) tween = null;
   }
-  controls.update();
+  controls.update(dt);
 
   if (car) {
     // chassis: canopy, then shell, then lower body rise off the rolling chassis (same as the story)
@@ -305,7 +308,7 @@ function open() {
   resize();
   setDefaultView(true);
   clock.getDelta();
-  renderer.setAnimationLoop(frame);
+  renderer.setAnimationLoop(() => frame());   // (not frame itself: the loop passes a timestamp)
   loadCar();
   $('viewerClose').focus({ preventScroll: true });
 }
@@ -338,3 +341,21 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && active) 
 // warm the model cache once the page is idle, so the viewer opens quickly
 if ('requestIdleCallback' in window) requestIdleCallback(() => fetch(MODEL_URL).catch(() => {}), { timeout: 8000 });
 if (new URLSearchParams(location.search).has('viewer')) open();
+
+/* ============ Hooks for the video render (js/render.js) ============ */
+// Opens the viewer under manual control: nothing moves until step() is called with a fixed time step.
+export const viewerApi = {
+  get canvas() { return canvas; },
+  async openManual(pixelRatio) {
+    open();
+    renderer.setAnimationLoop(null);
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    await loadCar();
+  },
+  step(dt) { frame(dt); },
+  paint(i) { const s = colorPicker.querySelectorAll('.viewer__swatch')[i]; if (s) setPaint(s); },
+  toggle(name, on) { setToggle(name, on); },
+  spin(on, speed = 1.2) { controls.autoRotate = on; controls.autoRotateSpeed = speed; },
+  orbit(az, el, dist) { const t = new THREE.Vector3(0, 0.62, 0); flyTo(orbitPos(t, az, el, dist), t, 1800); },
+};

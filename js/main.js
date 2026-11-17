@@ -20,8 +20,9 @@ const BYTES = { car: 2197632, wheel: 662640 };
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug');              // ?debug snaps instantly; ?debug&u=3.4 jumps to a point in the story
 const USE_BLOOM = params.get('fx') !== '0';     // ?fx=0 renders without the bloom pass (for comparing cost)
-// ?demo plays the story by itself for screen recording (see "Demo mode" below)
-const DEMO = params.has('demo');
+// ?demo plays the story by itself for screen recording; ?render turns that into an MP4 file (see "Demo mode" below)
+const RENDER = params.has('render');
+const DEMO = params.has('demo') || RENDER;
 const reduceMotion = !DEMO && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const instant = DEBUG || reduceMotion;
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -490,6 +491,9 @@ function emitEffects(dt, energy, pow) {
  *    &nav=1                   keep the top bar (hidden by default)
  *    &loop=1                  start over when it reaches the end
  *  Keys: Space pauses / resumes, R starts over.
+ *
+ *  ?render takes the same options and renders the run frame by frame straight into an MP4, so nothing
+ *  is dropped however heavy the scene is (see js/render.js for its own options, e.g. the viewer segment).
  * ================================================================== */
 let demo = null;
 if (DEMO) {
@@ -501,15 +505,17 @@ if (DEMO) {
     const i = Math.min(sections.length - 1, Math.max(0, Math.floor(uu)));
     return Math.min(tops[i] + (uu - i) * heights[i], document.documentElement.scrollHeight - window.innerHeight);
   };
-  const speed = +(params.get('speed') || 0.5), delay = +(params.get('delay') ?? 3), loop = params.get('loop') === '1';
+  const speed = +(params.get('speed') || 0.5), delay = +(params.get('delay') ?? (RENDER ? 0.5 : 3)), loop = params.get('loop') === '1';
+  const tail = +(params.get('tail') ?? 1.2);   // seconds to hold once it stops (a render ends then)
   const RAMP_T = 1.2;                       // seconds to ease up to speed, and down again at the end
-  let t = -delay, playing = true;
+  let t = -delay, playing = true, T = Infinity;
   demo = {
     // distance along the run after t seconds: ease in, cruise, ease out
     step(dt) {
       if (!ready) return;
       const y0 = yOf(at(params.get('from'), 0)), y1 = yOf(at(params.get('to'), sections.length));
-      const D = Math.max(1, y1 - y0), v = speed * window.innerHeight, a = Math.min(RAMP_T, D / v), T = D / v + a;
+      const D = Math.max(1, y1 - y0), v = speed * window.innerHeight, a = Math.min(RAMP_T, D / v);
+      T = D / v + a;
       if (playing) t += dt;
       const tt = Math.max(0, Math.min(T, t));
       const d = tt < a ? (v * tt * tt) / (2 * a) : tt < T - a ? v * (tt - a / 2) : D - (v * (T - tt) ** 2) / (2 * a);
@@ -517,13 +523,32 @@ if (DEMO) {
       if (t > T + 2 && loop) t = -delay;
     },
     restart() { t = -delay; playing = true; },
+    get finished() { return t >= T + tail; },
   };
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); playing = !playing; }
     if (e.code === 'KeyR') demo.restart();
   });
   if (DEBUG) window.__rs.demo = demo;
-  console.info('Demo mode: Space pauses, R restarts. Options: from, to, speed, delay, nav, loop.');
+  if (RENDER) {
+    root.classList.add('is-render');
+    const r = { flash: () => +flashEl.style.opacity || 0 };
+    import('./render.js').then(({ renderVideo }) => renderVideo({
+      canvas,
+      ...r,
+      whenReady: () => new Promise((res) => { const check = () => (ready ? res() : setTimeout(check, 100)); check(); }),
+      // one frame of the story at a fixed time step, rendered at the video's resolution
+      // jump straight to the start, so the first frames don't fly through the story to get there
+      start() { manual = true; demo.restart(); demo.step(0); u = lastU = scrollU(); },
+      step(dt) { demo.step(dt); frame(dt); },
+      get finished() { return demo.finished; },
+      setPixelRatio(pr) {
+        pixelRatio = pr;
+        renderer.setPixelRatio(pr); renderer.setSize(window.innerWidth, window.innerHeight);
+        if (composer) { composer.setPixelRatio(pr); composer.setSize(window.innerWidth, window.innerHeight); }
+      },
+    }, params));
+  } else console.info('Demo mode: Space pauses, R restarts. Options: from, to, speed, delay, nav, loop.');
 }
 
 // the 3D viewer takes over the screen: pause this scene and the page's scrolling while it is open
@@ -535,7 +560,7 @@ renderer.setAnimationLoop((now) => {
   if (manual || paused) return;            // the capture tool is stepping frames itself, or the viewer is open
   lenis?.raf(now);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (demo) demo.step(dt);
+  if (demo && !RENDER) demo.step(dt);       // a render steps the demo itself, frame by frame
   frame(dt);
 });
 

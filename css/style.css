@@ -425,3 +425,8 @@ html.is-demo { scrollbar-width: none; scroll-behavior: auto; }
 html.is-demo::-webkit-scrollbar { display: none; }
 html.is-demo, html.is-demo * { cursor: none !important; }
 html.is-demo:not(.is-demo-nav) .nav, html.is-demo .progress, html.is-demo .cue { opacity: 0 !important; pointer-events: none; }
+
+/* Video render (?render): the text is painted into the frames by js/render.js, which runs its own fade-ups,
+   so the page's stays put; and the viewer's panel shows just the paint swatches */
+html.is-render .reveal { transition: none !important; opacity: 1; transform: none; }
+html.is-render .viewer__group:has(.viewer__actions) { display: none; }

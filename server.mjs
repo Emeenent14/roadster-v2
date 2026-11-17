@@ -25,11 +25,13 @@ createServer(async (req, res) => {
   try {
     // dev only: the page can save a rendered frame for review (js/main.js, ?debug)
     if (req.method === 'POST' && req.url.startsWith('/__shot')) {
-      const name = (new URL(req.url, 'http://x').searchParams.get('name') || 'shot').replace(/[^a-z0-9_-]/gi, '');
+      const q = new URL(req.url, 'http://x').searchParams;
+      const name = (q.get('name') || 'shot').replace(/[^a-z0-9_-]/gi, '');
+      const ext = q.get('ext') === 'mp4' ? '.mp4' : '.jpg';            // a rendered video (js/render.js) or a frame
       const chunks = [];
       for await (const c of req) chunks.push(c);
       await mkdir(join(root, '.shots'), { recursive: true });
-      await writeFile(join(root, '.shots', name + '.jpg'), Buffer.concat(chunks));
+      await writeFile(join(root, '.shots', name + ext), Buffer.concat(chunks));
       res.writeHead(200, { 'Content-Type': 'text/plain' }).end('ok');
       return;
     }

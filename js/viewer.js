@@ -235,7 +235,7 @@ function resetAll() {
 /* ============ Animation ============ */
 const ease = (t) => t * t * (3 - 2 * t);
 const seg = (v, a, b) => Math.min(1, Math.max(0, (v - a) / (b - a)));
-const _wp = new THREE.Vector3(), _wd = new THREE.Vector3();
+const _wp = new THREE.Vector3(), _wd = new THREE.Vector3(), _tw0 = new THREE.Vector3(), _tw1 = new THREE.Vector3();
 function frame(fixedDt) {
   if (!active) return;
   const dt = fixedDt ?? Math.min(clock.getDelta(), 0.05);
@@ -246,8 +246,11 @@ function frame(fixedDt) {
 
   if (tween) {
     const t = ease(Math.min(1, (vt * 1000 - tween.start) / tween.ms));
-    camera.position.lerpVectors(tween.p0, tween.p1, t);
+    // swing round the car rather than straight through it: blend the direction and the distance separately
     controls.target.lerpVectors(tween.t0, tween.t1, t);
+    const d0 = _tw0.subVectors(tween.p0, tween.t0), d1 = _tw1.subVectors(tween.p1, tween.t1);
+    const len = d0.length() + (d1.length() - d0.length()) * t;
+    camera.position.copy(d0.normalize().lerp(d1.normalize(), t).normalize().multiplyScalar(len)).add(controls.target);
     if (t >= 1) tween = null;
   }
   controls.update(dt);
@@ -343,19 +346,12 @@ if ('requestIdleCallback' in window) requestIdleCallback(() => fetch(MODEL_URL).
 if (new URLSearchParams(location.search).has('viewer')) open();
 
 /* ============ Hooks for the video render (js/render.js) ============ */
-// Opens the viewer under manual control: nothing moves until step() is called with a fixed time step.
+// The render opens the viewer the way a visitor does (a click), then takes over its clock:
+// from then on nothing moves until step() is called with a fixed time step.
 export const viewerApi = {
   get canvas() { return canvas; },
-  async openManual(pixelRatio) {
-    open();
-    renderer.setAnimationLoop(null);
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    await loadCar();
-  },
+  get open() { return active; },
+  get ready() { return ready; },
+  takeOver() { renderer.setAnimationLoop(null); },
   step(dt) { frame(dt); },
-  paint(i) { const s = colorPicker.querySelectorAll('.viewer__swatch')[i]; if (s) setPaint(s); },
-  toggle(name, on) { setToggle(name, on); },
-  spin(on, speed = 1.2) { controls.autoRotate = on; controls.autoRotateSpeed = speed; },
-  orbit(az, el, dist) { const t = new THREE.Vector3(0, 0.62, 0); flyTo(orbitPos(t, az, el, dist), t, 1800); },
 };

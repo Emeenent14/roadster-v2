@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Roadster · Video render</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #0b0b0d; color: #d0d1d2; font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .stage { position: fixed; inset: 0 0 64px; display: grid; place-items: center; overflow: hidden; }
+    .frame-box { position: relative; outline: 1px solid #222; }
+    .frame-box iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #000; }
+    .bar { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-top: 1px solid #1d1d20; background: #0e0e11; }
+    .meter { flex: 1; height: 3px; background: #222; border-radius: 2px; overflow: hidden; }
+    .meter i { display: block; height: 100%; width: 0; background: #c9a46a; transition: width 0.3s ease; }
+    .status { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+    a.save { color: #c9a46a; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="stage"><div class="frame-box" id="box"></div></div>
+  <div class="bar">
+    <span class="status" id="status">Starting…</span>
+    <div class="meter"><i id="meter"></i></div>
+    <span id="link"></span>
+  </div>
+  <script type="module" src="js/render-stage.js"></script>
+</body>
+</html>

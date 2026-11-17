@@ -493,20 +493,23 @@ function emitEffects(dt, energy, pow) {
  *  Keys: Space pauses / resumes, R starts over.
  *
  *  ?render takes the same options and renders the run frame by frame straight into an MP4, so nothing
- *  is dropped however heavy the scene is (see js/render.js for its own options, e.g. the viewer segment).
+ *  is dropped however heavy the scene is. Open it through render.html, which runs it at a fixed video size
+ *  (see js/render.js and js/render-stage.js).
  * ================================================================== */
 let demo = null;
 if (DEMO) {
   const root = document.documentElement;
-  root.classList.add('is-demo');
+  // a live demo hides the page's chrome; a render keeps the site exactly as a visitor sees it
+  root.classList.add(RENDER ? 'is-render' : 'is-demo');
   if (params.get('nav') === '1') root.classList.add('is-demo-nav');
   const at = (v, fallback) => (v === null ? fallback : v in IDX ? IDX[v] : Number.isFinite(+v) ? +v : fallback);
   const yOf = (uu) => {
     const i = Math.min(sections.length - 1, Math.max(0, Math.floor(uu)));
     return Math.min(tops[i] + (uu - i) * heights[i], document.documentElement.scrollHeight - window.innerHeight);
   };
-  const speed = +(params.get('speed') || 0.5), delay = +(params.get('delay') ?? (RENDER ? 0.5 : 3)), loop = params.get('loop') === '1';
-  const tail = +(params.get('tail') ?? 1.2);   // seconds to hold once it stops (a render ends then)
+  // a render takes its time: about a minute and a half for the whole page, with a beat on the title first
+  const speed = +(params.get('speed') || (RENDER ? 0.25 : 0.5)), delay = +(params.get('delay') ?? (RENDER ? 2.5 : 3)), loop = params.get('loop') === '1';
+  const tail = +(params.get('tail') ?? (RENDER ? 0.6 : 1.2));   // seconds to hold once it stops (a render ends then)
   const RAMP_T = 1.2;                       // seconds to ease up to speed, and down again at the end
   let t = -delay, playing = true, T = Infinity;
   demo = {
@@ -524,6 +527,7 @@ if (DEMO) {
     },
     restart() { t = -delay; playing = true; },
     get finished() { return t >= T + tail; },
+    get seconds() { return delay + T + tail; },        // length of the whole run (known after the first step)
   };
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); playing = !playing; }
@@ -531,17 +535,15 @@ if (DEMO) {
   });
   if (DEBUG) window.__rs.demo = demo;
   if (RENDER) {
-    root.classList.add('is-render');
-    const r = { flash: () => +flashEl.style.opacity || 0 };
     import('./render.js').then(({ renderVideo }) => renderVideo({
       canvas,
-      ...r,
       whenReady: () => new Promise((res) => { const check = () => (ready ? res() : setTimeout(check, 100)); check(); }),
-      // one frame of the story at a fixed time step, rendered at the video's resolution
       // jump straight to the start, so the first frames don't fly through the story to get there
       start() { manual = true; demo.restart(); demo.step(0); u = lastU = scrollU(); },
+      // one frame of the story at a fixed time step
       step(dt) { demo.step(dt); frame(dt); },
       get finished() { return demo.finished; },
+      get seconds() { return demo.seconds; },
       setPixelRatio(pr) {
         pixelRatio = pr;
         renderer.setPixelRatio(pr); renderer.setSize(window.innerWidth, window.innerHeight);

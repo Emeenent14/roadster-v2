@@ -352,6 +352,6 @@ export const viewerApi = {
   get canvas() { return canvas; },
   get open() { return active; },
   get ready() { return ready; },
-  takeOver() { renderer.setAnimationLoop(null); },
+  takeOver(pixelRatio) { renderer.setAnimationLoop(null); renderer.setPixelRatio(pixelRatio); renderer.setSize(window.innerWidth, window.innerHeight); },
   step(dt) { frame(dt); },
 };

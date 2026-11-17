@@ -6,8 +6,10 @@
 // CSS fades run on the video's clock. The run scrolls the whole page, then a pointer clicks "View in 3D"
 // and tries the viewer: spin, each paint colour, the thrusters and the chassis.
 //
-// Open it through render.html, which runs this page in a frame of a fixed size (1920×1080 by default),
-// so the video is full-frame whatever the shape of the browser window.
+// Open it through render.html, which runs this page in a frame of a fixed size, so the video is full-frame
+// whatever the shape of the browser window. The page is laid out at the screen's own width (as the visitor's
+// browser lays it out, display scaling included) and drawn up to the video size (1920×1080 by default).
+//   &scale=1.25    video pixels per page pixel (render.html sets this)
 //   &fps=30        frames per second (60 is smoother and takes twice as long)
 //   &outro=0       stop at the bottom of the page instead of going on into the 3D viewer
 //                  (not "viewer": ?viewer is the site's own link that opens the viewer straight away)
@@ -34,7 +36,11 @@ const VIEWER_SCRIPT = [
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const easeInOut = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
 const even = (x) => Math.max(2, Math.round(x / 2) * 2);
-const tick = () => new Promise((r) => setTimeout(r, 0));
+// Yield to the browser between frames. A message, not a timer: timers in a background tab are slowed to
+// once a second, so a render would crawl whenever its tab isn't the one in front.
+const yieldPort = new MessageChannel(), yieldWaiters = [];
+yieldPort.port1.onmessage = () => yieldWaiters.shift()?.();
+const tick = () => new Promise((r) => { yieldWaiters.push(r); yieldPort.port2.postMessage(0); });
 
 /* ============ The page's CSS fades and transitions, run on the video's clock ============ */
 const animStart = new WeakMap();
@@ -171,6 +177,11 @@ function paintPage(ctx, now, canvases) {
 
 /* ============ The pointer ============ */
 const pointer = { x: 0, y: 0, alpha: 0, clickAt: -9 };
+// While the page scrolls the pointer rests low in the middle, drifting a little the way a hand on a mouse does
+function idlePointer(now) {
+  pointer.x = window.innerWidth * 0.56 + 16 * Math.sin(now * 0.37) + 7 * Math.sin(now * 0.93 + 1.3);
+  pointer.y = window.innerHeight * 0.74 + 10 * Math.sin(now * 0.29 + 0.6) + 5 * Math.sin(now * 1.07);
+}
 const ARROW = new Path2D('M0 0 L0 17 L4.6 13 L7.6 20 L10.2 18.9 L7.3 12.3 L13 12.3 Z');
 function paintPointer(ctx, now) {
   if (pointer.alpha <= 0) return;
@@ -229,7 +240,7 @@ async function makeEncoder(width, height, fps) {
       encoder.encode(frame, { keyFrame: n % (fps * 2) === 0 });
       frame.close();
       n++;
-      while (encoder.encodeQueueSize > 4) await new Promise((r) => setTimeout(r, 2));
+      while (encoder.encodeQueueSize > 4) await tick();
     },
     async finish() {
       await encoder.flush();
@@ -273,11 +284,13 @@ export async function renderVideo(story, params) {
     report.progress('Loading…', 0);
     await story.whenReady();
     await document.fonts.ready;
-    story.setPixelRatio(1);                                           // one canvas pixel per video pixel
-    const W = even(window.innerWidth), H = even(window.innerHeight);
+    const k = Math.max(0.25, +(params.get('scale') || 1));          // video pixels per page pixel
+    story.setPixelRatio(k);                                           // the 3D scene renders at the video's resolution
+    const W = even(window.innerWidth * k), H = even(window.innerHeight * k);
     const out = document.createElement('canvas');
     out.width = W; out.height = H;
     const ctx = out.getContext('2d');
+    ctx.setTransform(k, 0, 0, k, 0, 0);                               // everything below is drawn in page pixels
     const enc = await makeEncoder(W, H, fps);
 
     // the WebGL canvases are copied right after each draw (later in the task they may already be cleared)
@@ -309,22 +322,22 @@ export async function renderVideo(story, params) {
 
     // 1. the story: the page scrolls from the top to the bottom
     story.start();
+    pointer.alpha = 1;
     while (!story.finished) {
       story.step(dt); copyOf(sceneCanvas); now += dt;
+      idlePointer(now);
       await emit('Scrolling the page');
     }
 
     if (withViewer) {
-      // 2. the pointer comes in and clicks "View in 3D" in the footer
-      pointer.x = W * 0.66; pointer.y = H * 0.56;
+      // 2. the pointer moves to "View in 3D" in the footer and clicks it
       const intro = [{ at: 1.3, sel: '#view3d' }];
       for (let t = 0; !viewerApi.open; t += dt) {
         story.step(dt); copyOf(sceneCanvas); now += dt;
-        pointer.alpha = clamp01(t / 0.3);
         runPlan(intro, t, now);
         await emit('Opening the 3D viewer');
       }
-      viewerApi.takeOver();
+      viewerApi.takeOver(k);
 
       // 3. the viewer: it loads, then the pointer tries the controls
       const plan = VIEWER_SCRIPT.map((p) => ({ ...p }));

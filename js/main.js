@@ -537,7 +537,8 @@ if (DEMO) {
   if (RENDER) {
     import('./render.js').then(({ renderVideo }) => renderVideo({
       canvas,
-      whenReady: () => new Promise((res) => { const check = () => (ready ? res() : setTimeout(check, 100)); check(); }),
+      // ready once the models are in; the loader screen's own animation doesn't run in a background tab, so don't wait for it
+      whenReady: () => new Promise((res) => { const check = () => (ready ? res() : load.loaded ? (begin(), res()) : setTimeout(check, 100)); check(); }),
       // jump straight to the start, so the first frames don't fly through the story to get there
       start() { manual = true; demo.restart(); demo.step(0); u = lastU = scrollU(); },
       // one frame of the story at a fixed time step
